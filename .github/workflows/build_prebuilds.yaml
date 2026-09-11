@@ -1,0 +1,273 @@
+name: Build and Release Xiph Prebuilds
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Android (arm64-v8a, armeabi-v7a, x86, x86_64)
+  # -------------------------------------------------------------------------
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Cache Xiph sources
+        uses: actions/cache@v4
+        with:
+          path: sources
+          key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26d
+
+      - name: Build Android libraries
+        run: dart run tool/build.dart --os=android --ndk-path="${{ steps.setup-ndk.outputs.ndk-path }}"
+
+      - name: Package Android archive
+        run: dart run tool/package.dart output dist
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiph-android
+          path: dist/xiph-android.tar.gz
+
+  # -------------------------------------------------------------------------
+  # Linux (x86_64 and arm64)
+  # -------------------------------------------------------------------------
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Cache Xiph sources
+        uses: actions/cache@v4
+        with:
+          path: sources
+          key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
+
+      - name: Install dependencies and cross-compilers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu ninja-build
+          dart pub get
+
+      - name: Build Linux x64 and arm64
+        run: dart run tool/build.dart --os=linux --arch=all
+
+      - name: Package Linux archives
+        run: dart run tool/package.dart output dist
+
+      - name: Upload Linux x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiph-linux-x64
+          path: dist/xiph-linux-x64.tar.gz
+
+      - name: Upload Linux arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiph-linux-arm64
+          path: dist/xiph-linux-arm64.tar.gz
+
+  # -------------------------------------------------------------------------
+  # Apple (macOS universal, iOS device + simulator)
+  # -------------------------------------------------------------------------
+  build-apple:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Cache Xiph sources
+        uses: actions/cache@v4
+        with:
+          path: sources
+          key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Build macOS universal static libraries
+        run: dart run tool/build.dart --os=macos
+
+      - name: Build iOS static libraries
+        run: dart run tool/build.dart --os=ios
+
+      - name: Package Apple archives
+        run: dart run tool/package.dart output dist
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiph-macos
+          path: dist/xiph-macos.tar.gz
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiph-ios
+          path: dist/xiph-ios.tar.gz
+
+  # -------------------------------------------------------------------------
+  # Windows (x64 and arm64)
+  # -------------------------------------------------------------------------
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Cache Xiph sources
+        uses: actions/cache@v4
+        with:
+          path: sources
+          key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Build Windows x64 and arm64
+        run: dart run tool/build.dart --os=windows --arch=all
+
+      - name: Package Windows archives
+        run: dart run tool/package.dart output dist
+
+      - name: Upload Windows x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiph-windows-x64
+          path: dist/xiph-windows-x64.zip
+
+      - name: Upload Windows arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiph-windows-arm64
+          path: dist/xiph-windows-arm64.zip
+
+  # -------------------------------------------------------------------------
+  # Universal C Headers
+  # -------------------------------------------------------------------------
+  package-headers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Cache Xiph sources
+        uses: actions/cache@v4
+        with:
+          path: sources
+          key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Extract universal headers
+        run: dart run tool/build.dart --headers-only
+
+      - name: Package headers archive
+        run: dart run tool/package.dart output dist
+
+      - name: Upload headers artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiph-include
+          path: dist/xiph-include.tar.gz
+
+  # -------------------------------------------------------------------------
+  # Release Creation & Checksums
+  # -------------------------------------------------------------------------
+  release:
+    needs: [build-android, build-linux, build-apple, build-windows, package-headers]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Create dist directory
+        run: mkdir -p dist
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded_artifacts
+
+      - name: Move all archives into dist
+        run: |
+          find downloaded_artifacts -type f -exec mv -t dist {} +
+          ls -la dist
+
+      - name: Generate SHA256SUMS.txt
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Determine tag name
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            echo "val=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "val=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.val }}
+          name: Xiph Prebuilds ${{ steps.tag.outputs.val }}
+          body: |
+            Automated reproducible build of Xiph.org libraries for `flutter_soloud`.
+            
+            ### Pinned Commits
+            - `ogg`: `db5c7a4`
+            - `vorbis`: `84c0236`
+            - `opus`: `c79a9bd`
+            - `flac`: `9547dbc`
+            
+            Verify integrity with `SHA256SUMS.txt`.
+          files: |
+            dist/*

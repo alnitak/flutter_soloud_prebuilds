@@ -1,0 +1,12 @@
+name: flutter_soloud_prebuilds
+description: Build tooling for precompiled Xiph libraries used by flutter_soloud.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  args: ^2.5.0
+  crypto: ^3.0.3
+  path: ^1.9.0
