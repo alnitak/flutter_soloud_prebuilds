@@ -15,7 +15,8 @@ String getPackageVersion() {
 }
 
 void writeVersionFile(Directory dir, String version) {
-  File(p.join(dir.path, 'version.txt')).writeAsStringSync('$version\n');
+  File(p.join(dir.path, 'flutter_soloud_prebuild_version.txt'))
+      .writeAsStringSync('$version\n');
 }
 
 void main(List<String> args) async {

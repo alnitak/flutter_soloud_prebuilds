@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag (e.g. v1.0.0)'
-        required: true
-        default: 'v1.0.0'
+        description: 'Release tag (leave blank to use version from pubspec.yaml, e.g. v1.0.1)'
+        required: false
+        default: ''
   push:
     tags:
       - 'v*'
@@ -245,20 +245,27 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Determine tag name
+      - name: Determine tag name and release title
         id: tag
         run: |
-          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
-            echo "val=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "val=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          RAW_TAG="${{ github.event.inputs.tag_name }}"
+          if [ -z "$RAW_TAG" ]; then
+            if [[ "${{ github.ref_name }}" =~ ^v?[0-9] ]]; then
+              RAW_TAG="${{ github.ref_name }}"
+            else
+              VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | tr -d '\r')
+              RAW_TAG="v$VERSION"
+            fi
           fi
+          TAG="v${RAW_TAG#v}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "title=Xiph Prebuilds $TAG" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.val }}
-          name: Xiph Prebuilds ${{ steps.tag.outputs.val }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.title }}
           body: |
             Automated reproducible build of Xiph.org libraries for `flutter_soloud`.
             
