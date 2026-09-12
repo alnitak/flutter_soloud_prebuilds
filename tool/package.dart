@@ -93,7 +93,8 @@ Future<void> makeTarGz(Directory srcDir, String tarGzPath) async {
   ]);
   if (result.exitCode != 0) {
     stderr.write(result.stderr);
-    throw ProcessException('tar', ['-czf', tarGzPath], 'Failed to create tar.gz', result.exitCode);
+    throw ProcessException(
+        'tar', ['-czf', tarGzPath], 'Failed to create tar.gz', result.exitCode);
   }
   print('Created: $tarGzPath');
 }
@@ -110,16 +111,20 @@ Future<void> makeZip(Directory srcDir, String zipPath) async {
       'Compress-Archive -Path "${srcDir.path}\\*" -DestinationPath "$zipPath" -Force',
     ]);
   } else {
-    result = await Process.run('zip', [
-      '-r',
-      zipPath,
-      '.',
-    ], workingDirectory: srcDir.path);
+    result = await Process.run(
+        'zip',
+        [
+          '-r',
+          zipPath,
+          '.',
+        ],
+        workingDirectory: srcDir.path);
   }
 
   if (result.exitCode != 0) {
     stderr.write(result.stderr);
-    throw ProcessException('zip', [zipPath], 'Failed to create zip', result.exitCode);
+    throw ProcessException(
+        'zip', [zipPath], 'Failed to create zip', result.exitCode);
   }
   print('Created: $zipPath');
 }

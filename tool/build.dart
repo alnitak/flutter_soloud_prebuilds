@@ -5,7 +5,11 @@ import 'config.dart';
 
 void main(List<String> rawArgs) async {
   final parser = ArgParser()
-    ..addOption('os', allowed: ['android', 'linux', 'macos', 'ios', 'windows', 'all'], defaultsTo: 'all')
+    ..addOption(
+      'os',
+      allowed: ['android', 'linux', 'macos', 'ios', 'windows', 'all'],
+      defaultsTo: 'all',
+    )
     ..addOption('arch', defaultsTo: 'all')
     ..addOption('sources-dir', defaultsTo: 'sources')
     ..addOption('output-dir', defaultsTo: 'output')
@@ -45,7 +49,9 @@ void main(List<String> rawArgs) async {
         Platform.environment['ANDROID_NDK_ROOT'] ??
         Platform.environment['ANDROID_NDK'];
     if (androidNdk == null && Platform.environment['ANDROID_HOME'] != null) {
-      final ndkDir = Directory(p.join(Platform.environment['ANDROID_HOME']!, 'ndk'));
+      final ndkDir = Directory(
+        p.join(Platform.environment['ANDROID_HOME']!, 'ndk'),
+      );
       if (ndkDir.existsSync()) {
         final versions = ndkDir.listSync().whereType<Directory>().toList()
           ..sort((a, b) => a.path.compareTo(b.path));
@@ -109,21 +115,47 @@ Future<void> ensureSources(Directory sourcesDir) async {
     if (!repoDir.existsSync()) {
       print('Cloning ${repo.name} (${repo.commit})...');
       await runProcess('git', ['clone', repo.url, repoDir.path]);
-      await runProcess('git', ['checkout', repo.commit], workingDirectory: repoDir.path);
+      await runProcess(
+          'git',
+          [
+            'checkout',
+            repo.commit,
+          ],
+          workingDirectory: repoDir.path);
     } else {
-      print('Repository ${repo.name} exists. Ensuring commit ${repo.commit}...');
-      await runProcess('git', ['checkout', repo.commit], workingDirectory: repoDir.path);
+      print(
+          'Repository ${repo.name} exists. Ensuring commit ${repo.commit}...');
+      await runProcess(
+          'git',
+          [
+            'checkout',
+            repo.commit,
+          ],
+          workingDirectory: repoDir.path);
     }
   }
 }
 
-Future<void> runProcess(String executable, List<String> args, {String? workingDirectory}) async {
-  print('> $executable ${args.join(' ')}');
-  final result = await Process.run(executable, args, workingDirectory: workingDirectory);
+Future<void> runProcess(
+  String executable,
+  List<String> args, {
+  String? workingDirectory,
+}) async {
+  print('> $executable ${args.join(" ")}');
+  final result = await Process.run(
+    executable,
+    args,
+    workingDirectory: workingDirectory,
+  );
   if (result.exitCode != 0) {
     stdout.write(result.stdout);
     stderr.write(result.stderr);
-    throw ProcessException(executable, args, 'Command failed with code ${result.exitCode}', result.exitCode);
+    throw ProcessException(
+      executable,
+      args,
+      'Command failed with code ${result.exitCode}',
+      result.exitCode,
+    );
   }
 }
 
@@ -132,7 +164,14 @@ Future<void> runCmake(List<String> args) async {
 }
 
 Future<void> runCmakeBuild(Directory buildDir) async {
-  await runCmake(['--build', buildDir.path, '--config', 'Release', '--target', 'install']);
+  await runCmake([
+    '--build',
+    buildDir.path,
+    '--config',
+    'Release',
+    '--target',
+    'install',
+  ]);
 }
 
 void cleanDir(Directory dir) {
@@ -142,10 +181,31 @@ void cleanDir(Directory dir) {
   dir.createSync(recursive: true);
 }
 
+String findInstalledOggLib(
+  Directory installDir, {
+  bool isApple = false,
+  bool isWindows = false,
+}) {
+  if (isApple) {
+    return p.join(installDir.path, 'lib', 'libogg.a');
+  }
+  if (isWindows) {
+    return p.join(installDir.path, 'lib', 'ogg.lib');
+  }
+  final lib64 = File(p.join(installDir.path, 'lib64', 'libogg.so'));
+  if (lib64.existsSync()) return lib64.path;
+  return p.join(installDir.path, 'lib', 'libogg.so');
+}
+
 // ---------------------------------------------------------------------------
 // Android Build
 // ---------------------------------------------------------------------------
-Future<void> buildAndroid(Directory sourcesDir, Directory outputDir, String ndkPath, String targetArch) async {
+Future<void> buildAndroid(
+  Directory sourcesDir,
+  Directory outputDir,
+  String ndkPath,
+  String targetArch,
+) async {
   print('\n--- Building Android libraries ---');
   final abis = <String, String>{
     'arm64-v8a': 'arm64-v8a',
@@ -156,21 +216,40 @@ Future<void> buildAndroid(Directory sourcesDir, Directory outputDir, String ndkP
 
   final targetAbis = targetArch == 'all'
       ? abis.keys.toList()
-      : abis.keys.where((k) => k == targetArch || (targetArch == 'arm64' && k == 'arm64-v8a') || (targetArch == 'arm' && k == 'armeabi-v7a') || (targetArch == 'x64' && k == 'x86_64') || (targetArch == 'ia32' && k == 'x86')).toList();
+      : abis.keys
+          .where(
+            (k) =>
+                k == targetArch ||
+                (targetArch == 'arm64' && k == 'arm64-v8a') ||
+                (targetArch == 'arm' && k == 'armeabi-v7a') ||
+                (targetArch == 'x64' && k == 'x86_64') ||
+                (targetArch == 'ia32' && k == 'x86'),
+          )
+          .toList();
 
   for (final abi in targetAbis) {
     print('\n>>> Building Android ABI: $abi <<<');
-    final tempBuild = Directory(p.join(Directory.systemTemp.path, 'soloud_build_android', abi));
-    final tempInstall = Directory(p.join(Directory.systemTemp.path, 'soloud_install_android', abi));
+    final tempBuild = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_build_android', abi),
+    );
+    final tempInstall = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_install_android', abi),
+    );
     cleanDir(tempBuild);
     cleanDir(tempInstall);
 
-    final ndkToolchain = p.join(ndkPath, 'build', 'cmake', 'android.toolchain.cmake');
+    final ndkToolchain = p.join(
+      ndkPath,
+      'build',
+      'cmake',
+      'android.toolchain.cmake',
+    );
     final commonFlags = [
       '-DCMAKE_TOOLCHAIN_FILE=$ndkToolchain',
       '-DANDROID_ABI=$abi',
       '-DANDROID_PLATFORM=android-21',
       '-DCMAKE_BUILD_TYPE=Release',
+      '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=ON',
       '-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384,--gc-sections',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
@@ -178,8 +257,10 @@ Future<void> buildAndroid(Directory sourcesDir, Directory outputDir, String ndkP
 
     // 1. ogg
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'ogg'),
-      '-B', p.join(tempBuild.path, 'ogg'),
+      '-S',
+      p.join(sourcesDir.path, 'ogg'),
+      '-B',
+      p.join(tempBuild.path, 'ogg'),
       ...commonFlags,
       '-DINSTALL_DOCS=OFF',
       '-DBUILD_TESTING=OFF',
@@ -188,8 +269,10 @@ Future<void> buildAndroid(Directory sourcesDir, Directory outputDir, String ndkP
 
     // 2. opus
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'opus'),
-      '-B', p.join(tempBuild.path, 'opus'),
+      '-S',
+      p.join(sourcesDir.path, 'opus'),
+      '-B',
+      p.join(tempBuild.path, 'opus'),
       ...commonFlags,
       '-DOPUS_BUILD_PROGRAMS=OFF',
       '-DOPUS_BUILD_TESTING=OFF',
@@ -199,10 +282,12 @@ Future<void> buildAndroid(Directory sourcesDir, Directory outputDir, String ndkP
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'opus')));
 
     // 3. vorbis
-    final oggLib = p.join(tempInstall.path, 'lib', 'libogg.so');
+    final oggLib = findInstalledOggLib(tempInstall);
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'vorbis'),
-      '-B', p.join(tempBuild.path, 'vorbis'),
+      '-S',
+      p.join(sourcesDir.path, 'vorbis'),
+      '-B',
+      p.join(tempBuild.path, 'vorbis'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
       '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
@@ -213,14 +298,20 @@ Future<void> buildAndroid(Directory sourcesDir, Directory outputDir, String ndkP
 
     // 4. flac
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'flac'),
-      '-B', p.join(tempBuild.path, 'flac'),
+      '-S',
+      p.join(sourcesDir.path, 'flac'),
+      '-B',
+      p.join(tempBuild.path, 'flac'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
+      '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
+      '-DOGG_LIBRARY=$oggLib',
+      '-DBUILD_CXXLIBS=OFF',
       '-DBUILD_DOCS=OFF',
       '-DBUILD_EXAMPLES=OFF',
       '-DBUILD_PROGRAMS=OFF',
       '-DBUILD_TESTING=OFF',
+      '-DINSTALL_MANPAGES=OFF',
       '-DWITH_STACK_PROTECTOR=OFF',
     ]);
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'flac')));
@@ -228,11 +319,14 @@ Future<void> buildAndroid(Directory sourcesDir, Directory outputDir, String ndkP
     // Copy built .so files to output/android/<abi>/
     final destAbiDir = Directory(p.join(outputDir.path, 'android', abi));
     cleanDir(destAbiDir);
-    final libDir = Directory(p.join(tempInstall.path, 'lib'));
-    for (final file in libDir.listSync()) {
-      if (file is File && file.path.endsWith('.so')) {
-        final fileName = p.basename(file.path);
-        await file.copy(p.join(destAbiDir.path, fileName));
+    for (final folder in ['lib', 'lib64']) {
+      final libDir = Directory(p.join(tempInstall.path, folder));
+      if (!libDir.existsSync()) continue;
+      for (final file in libDir.listSync()) {
+        if (file is File && file.path.endsWith('.so')) {
+          final fileName = p.basename(file.path);
+          await file.copy(p.join(destAbiDir.path, fileName));
+        }
       }
     }
     print('Android $abi libraries copied to ${destAbiDir.path}');
@@ -242,22 +336,33 @@ Future<void> buildAndroid(Directory sourcesDir, Directory outputDir, String ndkP
 // ---------------------------------------------------------------------------
 // Linux Build (x86_64 and arm64)
 // ---------------------------------------------------------------------------
-Future<void> buildLinux(Directory sourcesDir, Directory outputDir, String targetArch) async {
+Future<void> buildLinux(
+  Directory sourcesDir,
+  Directory outputDir,
+  String targetArch,
+) async {
   print('\n--- Building Linux libraries ---');
   final arches = targetArch == 'all'
       ? ['x64', 'arm64']
-      : (targetArch == 'x86_64' || targetArch == 'x64') ? ['x64'] : ['arm64'];
+      : (targetArch == 'x86_64' || targetArch == 'x64')
+          ? ['x64']
+          : ['arm64'];
 
   for (final arch in arches) {
     print('\n>>> Building Linux $arch <<<');
-    final tempBuild = Directory(p.join(Directory.systemTemp.path, 'soloud_build_linux', arch));
-    final tempInstall = Directory(p.join(Directory.systemTemp.path, 'soloud_install_linux', arch));
+    final tempBuild = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_build_linux', arch),
+    );
+    final tempInstall = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_install_linux', arch),
+    );
     cleanDir(tempBuild);
     cleanDir(tempInstall);
 
     final isCrossArm64 = arch == 'arm64' && Platform.version.contains('x64');
     final commonFlags = [
       '-DCMAKE_BUILD_TYPE=Release',
+      '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=ON',
       '-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
@@ -271,8 +376,10 @@ Future<void> buildLinux(Directory sourcesDir, Directory outputDir, String target
 
     // 1. ogg
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'ogg'),
-      '-B', p.join(tempBuild.path, 'ogg'),
+      '-S',
+      p.join(sourcesDir.path, 'ogg'),
+      '-B',
+      p.join(tempBuild.path, 'ogg'),
       ...commonFlags,
       '-DINSTALL_DOCS=OFF',
       '-DBUILD_TESTING=OFF',
@@ -281,8 +388,10 @@ Future<void> buildLinux(Directory sourcesDir, Directory outputDir, String target
 
     // 2. opus
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'opus'),
-      '-B', p.join(tempBuild.path, 'opus'),
+      '-S',
+      p.join(sourcesDir.path, 'opus'),
+      '-B',
+      p.join(tempBuild.path, 'opus'),
       ...commonFlags,
       '-DOPUS_BUILD_PROGRAMS=OFF',
       '-DOPUS_BUILD_TESTING=OFF',
@@ -292,12 +401,12 @@ Future<void> buildLinux(Directory sourcesDir, Directory outputDir, String target
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'opus')));
 
     // 3. vorbis
-    final oggLib = File(p.join(tempInstall.path, 'lib', 'libogg.so')).existsSync()
-        ? p.join(tempInstall.path, 'lib', 'libogg.so')
-        : p.join(tempInstall.path, 'lib64', 'libogg.so');
+    final oggLib = findInstalledOggLib(tempInstall);
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'vorbis'),
-      '-B', p.join(tempBuild.path, 'vorbis'),
+      '-S',
+      p.join(sourcesDir.path, 'vorbis'),
+      '-B',
+      p.join(tempBuild.path, 'vorbis'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
       '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
@@ -308,14 +417,20 @@ Future<void> buildLinux(Directory sourcesDir, Directory outputDir, String target
 
     // 4. flac
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'flac'),
-      '-B', p.join(tempBuild.path, 'flac'),
+      '-S',
+      p.join(sourcesDir.path, 'flac'),
+      '-B',
+      p.join(tempBuild.path, 'flac'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
+      '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
+      '-DOGG_LIBRARY=$oggLib',
+      '-DBUILD_CXXLIBS=OFF',
       '-DBUILD_DOCS=OFF',
       '-DBUILD_EXAMPLES=OFF',
       '-DBUILD_PROGRAMS=OFF',
       '-DBUILD_TESTING=OFF',
+      '-DINSTALL_MANPAGES=OFF',
       '-DWITH_STACK_PROTECTOR=OFF',
     ]);
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'flac')));
@@ -352,14 +467,19 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
 
   for (final arch in arches) {
     print('\n>>> Building macOS $arch <<<');
-    final tempBuild = Directory(p.join(Directory.systemTemp.path, 'soloud_build_macos', arch));
-    final tempInstall = Directory(p.join(Directory.systemTemp.path, 'soloud_install_macos', arch));
+    final tempBuild = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_build_macos', arch),
+    );
+    final tempInstall = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_install_macos', arch),
+    );
     cleanDir(tempBuild);
     cleanDir(tempInstall);
     archInstalls[arch] = tempInstall;
 
     final commonFlags = [
       '-DCMAKE_BUILD_TYPE=Release',
+      '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=OFF',
       '-DCMAKE_OSX_ARCHITECTURES=$arch',
       '-DCMAKE_OSX_DEPLOYMENT_TARGET=10.13',
@@ -368,8 +488,10 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
 
     // ogg
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'ogg'),
-      '-B', p.join(tempBuild.path, 'ogg'),
+      '-S',
+      p.join(sourcesDir.path, 'ogg'),
+      '-B',
+      p.join(tempBuild.path, 'ogg'),
       ...commonFlags,
       '-DINSTALL_DOCS=OFF',
       '-DBUILD_TESTING=OFF',
@@ -377,22 +499,30 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'ogg')));
 
     // opus
+    const opusAppleFlags = '-Os -fno-exceptions -fno-unwind-tables '
+        '-fno-asynchronous-unwind-tables';
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'opus'),
-      '-B', p.join(tempBuild.path, 'opus'),
+      '-S',
+      p.join(sourcesDir.path, 'opus'),
+      '-B',
+      p.join(tempBuild.path, 'opus'),
       ...commonFlags,
       '-DOPUS_BUILD_PROGRAMS=OFF',
       '-DOPUS_BUILD_TESTING=OFF',
+      '-DOPUS_BUILD_SHARED_LIBRARY=OFF',
+      '-DCMAKE_C_FLAGS=$opusAppleFlags',
       '-DOPUS_STACK_PROTECTOR=OFF',
       '-DOPUS_CUSTOM_MODES=ON',
     ]);
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'opus')));
 
     // vorbis
-    final oggLib = p.join(tempInstall.path, 'lib', 'libogg.a');
+    final oggLib = findInstalledOggLib(tempInstall, isApple: true);
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'vorbis'),
-      '-B', p.join(tempBuild.path, 'vorbis'),
+      '-S',
+      p.join(sourcesDir.path, 'vorbis'),
+      '-B',
+      p.join(tempBuild.path, 'vorbis'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
       '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
@@ -403,14 +533,21 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
 
     // flac
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'flac'),
-      '-B', p.join(tempBuild.path, 'flac'),
+      '-S',
+      p.join(sourcesDir.path, 'flac'),
+      '-B',
+      p.join(tempBuild.path, 'flac'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
+      '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
+      '-DOGG_LIBRARY=$oggLib',
+      '-DWITH_OGG=ON',
+      '-DBUILD_CXXLIBS=OFF',
       '-DBUILD_DOCS=OFF',
       '-DBUILD_EXAMPLES=OFF',
       '-DBUILD_PROGRAMS=OFF',
       '-DBUILD_TESTING=OFF',
+      '-DINSTALL_MANPAGES=OFF',
       '-DWITH_STACK_PROTECTOR=OFF',
     ]);
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'flac')));
@@ -424,7 +561,13 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
     final arm64Path = p.join(archInstalls['arm64']!.path, 'lib', fileName);
     final x86Path = p.join(archInstalls['x86_64']!.path, 'lib', fileName);
     final destPath = p.join(destDir.path, fileName);
-    await runProcess('lipo', ['-create', arm64Path, x86Path, '-output', destPath]);
+    await runProcess('lipo', [
+      '-create',
+      arm64Path,
+      x86Path,
+      '-output',
+      destPath,
+    ]);
   }
   print('Universal macOS libraries created in ${destDir.path}');
 }
@@ -448,14 +591,19 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
     final arch = entry.value['arch']!;
     print('\n>>> Building iOS $sdk ($arch) <<<');
 
-    final tempBuild = Directory(p.join(Directory.systemTemp.path, 'soloud_build_ios', key));
-    final tempInstall = Directory(p.join(Directory.systemTemp.path, 'soloud_install_ios', key));
+    final tempBuild = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_build_ios', key),
+    );
+    final tempInstall = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_install_ios', key),
+    );
     cleanDir(tempBuild);
     cleanDir(tempInstall);
     targetInstalls[key] = tempInstall;
 
     final commonFlags = [
       '-DCMAKE_BUILD_TYPE=Release',
+      '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=OFF',
       '-DCMAKE_SYSTEM_NAME=iOS',
       '-DCMAKE_OSX_SYSROOT=$sdk',
@@ -466,8 +614,10 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
 
     // ogg
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'ogg'),
-      '-B', p.join(tempBuild.path, 'ogg'),
+      '-S',
+      p.join(sourcesDir.path, 'ogg'),
+      '-B',
+      p.join(tempBuild.path, 'ogg'),
       ...commonFlags,
       '-DINSTALL_DOCS=OFF',
       '-DBUILD_TESTING=OFF',
@@ -475,22 +625,30 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'ogg')));
 
     // opus
+    const opusAppleFlags = '-Os -fno-exceptions -fno-unwind-tables '
+        '-fno-asynchronous-unwind-tables';
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'opus'),
-      '-B', p.join(tempBuild.path, 'opus'),
+      '-S',
+      p.join(sourcesDir.path, 'opus'),
+      '-B',
+      p.join(tempBuild.path, 'opus'),
       ...commonFlags,
       '-DOPUS_BUILD_PROGRAMS=OFF',
       '-DOPUS_BUILD_TESTING=OFF',
+      '-DOPUS_BUILD_SHARED_LIBRARY=OFF',
+      '-DCMAKE_C_FLAGS=$opusAppleFlags',
       '-DOPUS_STACK_PROTECTOR=OFF',
       '-DOPUS_CUSTOM_MODES=ON',
     ]);
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'opus')));
 
     // vorbis
-    final oggLib = p.join(tempInstall.path, 'lib', 'libogg.a');
+    final oggLib = findInstalledOggLib(tempInstall, isApple: true);
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'vorbis'),
-      '-B', p.join(tempBuild.path, 'vorbis'),
+      '-S',
+      p.join(sourcesDir.path, 'vorbis'),
+      '-B',
+      p.join(tempBuild.path, 'vorbis'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
       '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
@@ -501,14 +659,23 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
 
     // flac
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'flac'),
-      '-B', p.join(tempBuild.path, 'flac'),
+      '-S',
+      p.join(sourcesDir.path, 'flac'),
+      '-B',
+      p.join(tempBuild.path, 'flac'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
+      '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
+      '-DOGG_LIBRARY=$oggLib',
+      '-DWITH_OGG=ON',
+      '-DIconv_FOUND=OFF',
+      '-DIntl_FOUND=OFF',
+      '-DBUILD_CXXLIBS=OFF',
       '-DBUILD_DOCS=OFF',
       '-DBUILD_EXAMPLES=OFF',
       '-DBUILD_PROGRAMS=OFF',
       '-DBUILD_TESTING=OFF',
+      '-DINSTALL_MANPAGES=OFF',
       '-DWITH_STACK_PROTECTOR=OFF',
     ]);
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'flac')));
@@ -520,13 +687,23 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
 
   for (final libName in xiphLibNames) {
     // 1. Device arm64: lib<Name>_iOS-device.a
-    final devSrc = File(p.join(targetInstalls['device-arm64']!.path, 'lib', 'lib$libName.a'));
+    final devSrc = File(
+      p.join(targetInstalls['device-arm64']!.path, 'lib', 'lib$libName.a'),
+    );
     final devDst = p.join(destDir.path, 'lib${libName}_iOS-device.a');
     await devSrc.copy(devDst);
 
     // 2. Simulator universal (arm64 + x86_64): lib<Name>_iOS-simulator.a
-    final simArm64 = p.join(targetInstalls['sim-arm64']!.path, 'lib', 'lib$libName.a');
-    final simX86 = p.join(targetInstalls['sim-x86_64']!.path, 'lib', 'lib$libName.a');
+    final simArm64 = p.join(
+      targetInstalls['sim-arm64']!.path,
+      'lib',
+      'lib$libName.a',
+    );
+    final simX86 = p.join(
+      targetInstalls['sim-x86_64']!.path,
+      'lib',
+      'lib$libName.a',
+    );
     final simDst = p.join(destDir.path, 'lib${libName}_iOS-simulator.a');
     await runProcess('lipo', ['-create', simArm64, simX86, '-output', simDst]);
   }
@@ -536,7 +713,11 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
 // ---------------------------------------------------------------------------
 // Windows Build (x64 and arm64)
 // ---------------------------------------------------------------------------
-Future<void> buildWindows(Directory sourcesDir, Directory outputDir, String targetArch) async {
+Future<void> buildWindows(
+  Directory sourcesDir,
+  Directory outputDir,
+  String targetArch,
+) async {
   print('\n--- Building Windows libraries ---');
   final arches = targetArch == 'all'
       ? ['x64', 'arm64']
@@ -544,24 +725,31 @@ Future<void> buildWindows(Directory sourcesDir, Directory outputDir, String targ
 
   for (final arch in arches) {
     print('\n>>> Building Windows $arch <<<');
-    final tempBuild = Directory(p.join(Directory.systemTemp.path, 'soloud_build_windows', arch));
-    final tempInstall = Directory(p.join(Directory.systemTemp.path, 'soloud_install_windows', arch));
+    final tempBuild = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_build_windows', arch),
+    );
+    final tempInstall = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_install_windows', arch),
+    );
     cleanDir(tempBuild);
     cleanDir(tempInstall);
 
     final isArm64 = arch == 'arm64';
     final commonFlags = [
       '-DCMAKE_BUILD_TYPE=Release',
+      '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=ON',
       '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
-      if (isArm64) '-A', if (isArm64) 'ARM64',
+      if (isArm64) ...['-A', 'ARM64'],
     ];
 
     // ogg
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'ogg'),
-      '-B', p.join(tempBuild.path, 'ogg'),
+      '-S',
+      p.join(sourcesDir.path, 'ogg'),
+      '-B',
+      p.join(tempBuild.path, 'ogg'),
       ...commonFlags,
       '-DINSTALL_DOCS=OFF',
       '-DBUILD_TESTING=OFF',
@@ -570,8 +758,10 @@ Future<void> buildWindows(Directory sourcesDir, Directory outputDir, String targ
 
     // opus
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'opus'),
-      '-B', p.join(tempBuild.path, 'opus'),
+      '-S',
+      p.join(sourcesDir.path, 'opus'),
+      '-B',
+      p.join(tempBuild.path, 'opus'),
       ...commonFlags,
       '-DOPUS_BUILD_PROGRAMS=OFF',
       '-DOPUS_BUILD_TESTING=OFF',
@@ -581,10 +771,12 @@ Future<void> buildWindows(Directory sourcesDir, Directory outputDir, String targ
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'opus')));
 
     // vorbis
-    final oggLib = p.join(tempInstall.path, 'lib', 'ogg.lib');
+    final oggLib = findInstalledOggLib(tempInstall, isWindows: true);
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'vorbis'),
-      '-B', p.join(tempBuild.path, 'vorbis'),
+      '-S',
+      p.join(sourcesDir.path, 'vorbis'),
+      '-B',
+      p.join(tempBuild.path, 'vorbis'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
       '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
@@ -595,14 +787,20 @@ Future<void> buildWindows(Directory sourcesDir, Directory outputDir, String targ
 
     // flac
     await runCmake([
-      '-S', p.join(sourcesDir.path, 'flac'),
-      '-B', p.join(tempBuild.path, 'flac'),
+      '-S',
+      p.join(sourcesDir.path, 'flac'),
+      '-B',
+      p.join(tempBuild.path, 'flac'),
       ...commonFlags,
       '-DOGG_ROOT=${tempInstall.path}',
+      '-DOGG_INCLUDE_DIR=${tempInstall.path}/include',
+      '-DOGG_LIBRARY=$oggLib',
+      '-DBUILD_CXXLIBS=OFF',
       '-DBUILD_DOCS=OFF',
       '-DBUILD_EXAMPLES=OFF',
       '-DBUILD_PROGRAMS=OFF',
       '-DBUILD_TESTING=OFF',
+      '-DINSTALL_MANPAGES=OFF',
       '-DWITH_STACK_PROTECTOR=OFF',
       '-DINSTALL_CMAKE_CONFIG_DIR=${tempInstall.path}/cmake',
       '-DENABLE_64_BIT_WORDS=ON',
@@ -633,17 +831,32 @@ Future<void> copyHeaders(Directory sourcesDir, Directory destIncludeDir) async {
   cleanDir(destIncludeDir);
 
   // 1. ogg
-  await copyDirectory(Directory(p.join(sourcesDir.path, 'ogg', 'include', 'ogg')), Directory(p.join(destIncludeDir.path, 'ogg')));
+  await copyDirectory(
+    Directory(p.join(sourcesDir.path, 'ogg', 'include', 'ogg')),
+    Directory(p.join(destIncludeDir.path, 'ogg')),
+  );
 
   // 2. opus
-  await copyDirectory(Directory(p.join(sourcesDir.path, 'opus', 'include')), Directory(p.join(destIncludeDir.path, 'opus')));
+  await copyDirectory(
+    Directory(p.join(sourcesDir.path, 'opus', 'include')),
+    Directory(p.join(destIncludeDir.path, 'opus')),
+  );
 
   // 3. vorbis
-  await copyDirectory(Directory(p.join(sourcesDir.path, 'vorbis', 'include', 'vorbis')), Directory(p.join(destIncludeDir.path, 'vorbis')));
+  await copyDirectory(
+    Directory(p.join(sourcesDir.path, 'vorbis', 'include', 'vorbis')),
+    Directory(p.join(destIncludeDir.path, 'vorbis')),
+  );
 
   // 4. flac
-  await copyDirectory(Directory(p.join(sourcesDir.path, 'flac', 'include', 'FLAC')), Directory(p.join(destIncludeDir.path, 'FLAC')));
-  await copyDirectory(Directory(p.join(sourcesDir.path, 'flac', 'include', 'share')), Directory(p.join(destIncludeDir.path, 'share')));
+  await copyDirectory(
+    Directory(p.join(sourcesDir.path, 'flac', 'include', 'FLAC')),
+    Directory(p.join(destIncludeDir.path, 'FLAC')),
+  );
+  await copyDirectory(
+    Directory(p.join(sourcesDir.path, 'flac', 'include', 'share')),
+    Directory(p.join(destIncludeDir.path, 'share')),
+  );
 }
 
 Future<void> copyDirectory(Directory src, Directory dst) async {
