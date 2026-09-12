@@ -22,13 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
       - name: Cache Xiph sources
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: sources
           key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
@@ -49,7 +49,7 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload Android artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xiph-android
           path: dist/xiph-android.tar.gz
@@ -61,13 +61,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
       - name: Cache Xiph sources
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: sources
           key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
@@ -85,13 +85,13 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload Linux x64 artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xiph-linux-x64
           path: dist/xiph-linux-x64.tar.gz
 
       - name: Upload Linux arm64 artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xiph-linux-arm64
           path: dist/xiph-linux-arm64.tar.gz
@@ -103,13 +103,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
       - name: Cache Xiph sources
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: sources
           key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
@@ -127,13 +127,13 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xiph-macos
           path: dist/xiph-macos.tar.gz
 
       - name: Upload iOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xiph-ios
           path: dist/xiph-ios.tar.gz
@@ -145,13 +145,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
       - name: Cache Xiph sources
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: sources
           key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
@@ -166,13 +166,13 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload Windows x64 artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xiph-windows-x64
           path: dist/xiph-windows-x64.zip
 
       - name: Upload Windows arm64 artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xiph-windows-arm64
           path: dist/xiph-windows-arm64.zip
@@ -184,13 +184,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
       - name: Cache Xiph sources
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: sources
           key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
@@ -205,7 +205,7 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload headers artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xiph-include
           path: dist/xiph-include.tar.gz
@@ -218,7 +218,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
@@ -230,7 +230,7 @@ jobs:
         run: mkdir -p dist
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: downloaded_artifacts
 
