@@ -878,11 +878,39 @@ Future<void> buildWindows(
 Future<void> copyHeaders(Directory sourcesDir, Directory destIncludeDir) async {
   cleanDir(destIncludeDir);
 
-  // 1. ogg
+  // 1. ogg: configure with CMake to generate config_types.h
+  final tempOggBuild = Directory(
+    p.join(Directory.systemTemp.path, 'soloud_ogg_headers_build'),
+  );
+  cleanDir(tempOggBuild);
+  await runCmake([
+    '-S',
+    p.join(sourcesDir.path, 'ogg'),
+    '-B',
+    tempOggBuild.path,
+    '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
+    '-DINSTALL_DOCS=OFF',
+    '-DBUILD_TESTING=OFF',
+  ]);
+
   await copyDirectory(
     Directory(p.join(sourcesDir.path, 'ogg', 'include', 'ogg')),
     Directory(p.join(destIncludeDir.path, 'ogg')),
   );
+  final genConfigTypes = File(
+    p.join(tempOggBuild.path, 'include', 'ogg', 'config_types.h'),
+  );
+  if (genConfigTypes.existsSync()) {
+    await genConfigTypes.copy(
+      p.join(destIncludeDir.path, 'ogg', 'config_types.h'),
+    );
+  }
+  final makefileAm = File(p.join(destIncludeDir.path, 'ogg', 'Makefile.am'));
+  if (makefileAm.existsSync()) makefileAm.deleteSync();
+  final configTypesIn = File(
+    p.join(destIncludeDir.path, 'ogg', 'config_types.h.in'),
+  );
+  if (configTypesIn.existsSync()) configTypesIn.deleteSync();
 
   // 2. opus
   await copyDirectory(
