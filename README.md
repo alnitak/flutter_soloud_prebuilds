@@ -29,8 +29,13 @@ dart run tool/build.dart
 
 # Build for specific platform
 dart run tool/build.dart --os=android
+dart run tool/build.dart --os=ios
 dart run tool/build.dart --os=linux --arch=arm64
 dart run tool/build.dart --os=macos
+dart run tool/build.dart --os=windows
+
+# Build for all platforms
+dart run tool/build.dart --os=all
 
 # Package output into dist/
 dart run tool/package.dart output dist
