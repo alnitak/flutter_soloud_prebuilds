@@ -2,6 +2,22 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+String getPackageVersion() {
+  final pubspecFile = File('pubspec.yaml');
+  if (pubspecFile.existsSync()) {
+    for (final line in pubspecFile.readAsLinesSync()) {
+      if (line.startsWith('version:')) {
+        return line.substring('version:'.length).trim();
+      }
+    }
+  }
+  return 'unknown';
+}
+
+void writeVersionFile(Directory dir, String version) {
+  File(p.join(dir.path, 'version.txt')).writeAsStringSync('$version\n');
+}
+
 void main(List<String> args) async {
   final outputDir = Directory(p.absolute(args.isNotEmpty ? args[0] : 'output'));
   final distDir = Directory(p.absolute(args.length > 1 ? args[1] : 'dist'));
@@ -9,6 +25,8 @@ void main(List<String> args) async {
   print('=== Packaging Xiph Prebuilds ===');
   print('Input Output Dir: ${outputDir.path}');
   print('Distribution Dir: ${distDir.path}');
+  final version = getPackageVersion();
+  print('Package Version: $version');
 
   if (!outputDir.existsSync()) {
     throw Exception('Output directory does not exist: ${outputDir.path}');
@@ -19,6 +37,7 @@ void main(List<String> args) async {
   final androidDir = Directory(p.join(outputDir.path, 'android'));
   if (androidDir.existsSync()) {
     print('Packaging Android...');
+    writeVersionFile(androidDir, version);
     await makeTarGz(androidDir, p.join(distDir.path, 'xiph-android.tar.gz'));
   }
 
@@ -28,6 +47,7 @@ void main(List<String> args) async {
     for (final archDir in linuxDir.listSync().whereType<Directory>()) {
       final arch = p.basename(archDir.path);
       print('Packaging Linux $arch...');
+      writeVersionFile(archDir, version);
       await makeTarGz(archDir, p.join(distDir.path, 'xiph-linux-$arch.tar.gz'));
     }
   }
@@ -36,6 +56,7 @@ void main(List<String> args) async {
   final macosDir = Directory(p.join(outputDir.path, 'macos'));
   if (macosDir.existsSync()) {
     print('Packaging macOS...');
+    writeVersionFile(macosDir, version);
     await makeTarGz(macosDir, p.join(distDir.path, 'xiph-macos.tar.gz'));
   }
 
@@ -43,6 +64,7 @@ void main(List<String> args) async {
   final iosDir = Directory(p.join(outputDir.path, 'ios'));
   if (iosDir.existsSync()) {
     print('Packaging iOS...');
+    writeVersionFile(iosDir, version);
     await makeTarGz(iosDir, p.join(distDir.path, 'xiph-ios.tar.gz'));
   }
 
@@ -52,6 +74,7 @@ void main(List<String> args) async {
     for (final archDir in windowsDir.listSync().whereType<Directory>()) {
       final arch = p.basename(archDir.path);
       print('Packaging Windows $arch...');
+      writeVersionFile(archDir, version);
       await makeZip(archDir, p.join(distDir.path, 'xiph-windows-$arch.zip'));
     }
   }
@@ -60,6 +83,7 @@ void main(List<String> args) async {
   final includeDir = Directory(p.join(outputDir.path, 'include'));
   if (includeDir.existsSync()) {
     print('Packaging Include Headers...');
+    writeVersionFile(includeDir, version);
     await makeTarGz(includeDir, p.join(distDir.path, 'xiph-include.tar.gz'));
   }
 
