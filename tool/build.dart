@@ -197,6 +197,23 @@ String findInstalledOggLib(
   return p.join(installDir.path, 'lib', 'libogg.so');
 }
 
+String? findNdkStrip(String ndkPath) {
+  final prebuiltDir = Directory(
+    p.join(ndkPath, 'toolchains', 'llvm', 'prebuilt'),
+  );
+  if (!prebuiltDir.existsSync()) return null;
+  final exe = Platform.isWindows ? 'llvm-strip.exe' : 'llvm-strip';
+  for (final host in prebuiltDir.listSync()) {
+    if (host is Directory) {
+      final stripBin = p.join(host.path, 'bin', exe);
+      if (File(stripBin).existsSync()) {
+        return stripBin;
+      }
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Android Build
 // ---------------------------------------------------------------------------
@@ -251,7 +268,8 @@ Future<void> buildAndroid(
       '-DCMAKE_BUILD_TYPE=Release',
       '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=ON',
-      '-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384,--gc-sections',
+      '-DCMAKE_C_FLAGS=-Os -flto -ffunction-sections -fdata-sections',
+      '-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384,--gc-sections -flto',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
     ];
 
@@ -325,9 +343,23 @@ Future<void> buildAndroid(
       for (final file in libDir.listSync()) {
         if (file is File && file.path.endsWith('.so')) {
           final fileName = p.basename(file.path);
+          if (fileName.contains('libFLAC++')) continue;
           await file.copy(p.join(destAbiDir.path, fileName));
         }
       }
+    }
+
+    // Strip debug symbols
+    final llvmStrip = findNdkStrip(ndkPath);
+    if (llvmStrip != null) {
+      print('Stripping Android $abi symbols with llvm-strip...');
+      for (final file in destAbiDir.listSync()) {
+        if (file is File && file.path.endsWith('.so')) {
+          await runProcess(llvmStrip, [file.path]);
+        }
+      }
+    } else {
+      print('Warning: llvm-strip not found in NDK, skipping stripping.');
     }
     print('Android $abi libraries copied to ${destAbiDir.path}');
   }
@@ -365,6 +397,8 @@ Future<void> buildLinux(
       '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=ON',
       '-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+      '-DCMAKE_C_FLAGS=-O2 -flto -ffunction-sections -fdata-sections',
+      '-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--gc-sections -flto',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
       if (isCrossArm64) ...[
         '-DCMAKE_SYSTEM_NAME=Linux',
@@ -443,6 +477,7 @@ Future<void> buildLinux(
       if (!dir.existsSync()) continue;
       for (final entity in dir.listSync()) {
         final name = p.basename(entity.path);
+        if (name.contains('libFLAC++')) continue;
         if (entity is Link) {
           final target = entity.targetSync();
           final link = Link(p.join(destDir.path, name));
@@ -451,6 +486,15 @@ Future<void> buildLinux(
         } else if (entity is File && name.contains('.so')) {
           await entity.copy(p.join(destDir.path, name));
         }
+      }
+    }
+
+    // Strip symbols from non-symlink .so files
+    final stripTool = isCrossArm64 ? 'aarch64-linux-gnu-strip' : 'strip';
+    print('Stripping Linux $arch symbols with $stripTool...');
+    for (final entity in destDir.listSync()) {
+      if (entity is File && entity.path.contains('.so')) {
+        await runProcess(stripTool, ['--strip-unneeded', entity.path]);
       }
     }
     print('Linux $arch libraries copied to ${destDir.path}');
@@ -568,6 +612,8 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
       '-output',
       destPath,
     ]);
+    // Strip non-global symbols
+    await runProcess('strip', ['-x', destPath]);
   }
   print('Universal macOS libraries created in ${destDir.path}');
 }
@@ -692,6 +738,7 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
     );
     final devDst = p.join(destDir.path, 'lib${libName}_iOS-device.a');
     await devSrc.copy(devDst);
+    await runProcess('strip', ['-x', devDst]);
 
     // 2. Simulator universal (arm64 + x86_64): lib<Name>_iOS-simulator.a
     final simArm64 = p.join(
@@ -706,6 +753,7 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
     );
     final simDst = p.join(destDir.path, 'lib${libName}_iOS-simulator.a');
     await runProcess('lipo', ['-create', simArm64, simX86, '-output', simDst]);
+    await runProcess('strip', ['-x', simDst]);
   }
   print('iOS static libraries copied to ${destDir.path}');
 }
