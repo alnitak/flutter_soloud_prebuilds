@@ -1,6 +1,8 @@
 import 'dart:io';
+
 import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
+
 import 'config.dart';
 
 void main(List<String> rawArgs) async {
@@ -45,7 +47,8 @@ void main(List<String> rawArgs) async {
   // Find Android NDK if needed
   String? androidNdk = args['ndk-path'] as String?;
   if (targetOs == 'android' || targetOs == 'all') {
-    androidNdk ??= Platform.environment['ANDROID_NDK_HOME'] ??
+    androidNdk ??=
+        Platform.environment['ANDROID_NDK_HOME'] ??
         Platform.environment['ANDROID_NDK_ROOT'] ??
         Platform.environment['ANDROID_NDK'];
     if (androidNdk == null && Platform.environment['ANDROID_HOME'] != null) {
@@ -115,23 +118,18 @@ Future<void> ensureSources(Directory sourcesDir) async {
     if (!repoDir.existsSync()) {
       print('Cloning ${repo.name} (${repo.commit})...');
       await runProcess('git', ['clone', repo.url, repoDir.path]);
-      await runProcess(
-          'git',
-          [
-            'checkout',
-            repo.commit,
-          ],
-          workingDirectory: repoDir.path);
+      await runProcess('git', [
+        'checkout',
+        repo.commit,
+      ], workingDirectory: repoDir.path);
     } else {
       print(
-          'Repository ${repo.name} exists. Ensuring commit ${repo.commit}...');
-      await runProcess(
-          'git',
-          [
-            'checkout',
-            repo.commit,
-          ],
-          workingDirectory: repoDir.path);
+        'Repository ${repo.name} exists. Ensuring commit ${repo.commit}...',
+      );
+      await runProcess('git', [
+        'checkout',
+        repo.commit,
+      ], workingDirectory: repoDir.path);
     }
   }
 }
@@ -234,15 +232,15 @@ Future<void> buildAndroid(
   final targetAbis = targetArch == 'all'
       ? abis.keys.toList()
       : abis.keys
-          .where(
-            (k) =>
-                k == targetArch ||
-                (targetArch == 'arm64' && k == 'arm64-v8a') ||
-                (targetArch == 'arm' && k == 'armeabi-v7a') ||
-                (targetArch == 'x64' && k == 'x86_64') ||
-                (targetArch == 'ia32' && k == 'x86'),
-          )
-          .toList();
+            .where(
+              (k) =>
+                  k == targetArch ||
+                  (targetArch == 'arm64' && k == 'arm64-v8a') ||
+                  (targetArch == 'arm' && k == 'armeabi-v7a') ||
+                  (targetArch == 'x64' && k == 'x86_64') ||
+                  (targetArch == 'ia32' && k == 'x86'),
+            )
+            .toList();
 
   for (final abi in targetAbis) {
     print('\n>>> Building Android ABI: $abi <<<');
@@ -377,8 +375,8 @@ Future<void> buildLinux(
   final arches = targetArch == 'all'
       ? ['x64', 'arm64']
       : (targetArch == 'x86_64' || targetArch == 'x64')
-          ? ['x64']
-          : ['arm64'];
+      ? ['x64']
+      : ['arm64'];
 
   for (final arch in arches) {
     print('\n>>> Building Linux $arch <<<');
@@ -475,7 +473,10 @@ Future<void> buildLinux(
     for (final libFolder in ['lib', 'lib64']) {
       final dir = Directory(p.join(tempInstall.path, libFolder));
       if (!dir.existsSync()) continue;
-      for (final entity in dir.listSync()) {
+
+      // By default followLinks is true, so Dart resolved symlinks to Files!
+      // Changing to followLinks: false enables the `entity is Link` block:
+      for (final entity in dir.listSync(followLinks: false)) {
         final name = p.basename(entity.path);
         if (name.contains('libFLAC++')) continue;
         if (entity is Link) {
@@ -492,7 +493,8 @@ Future<void> buildLinux(
     // Strip symbols from non-symlink .so files
     final stripTool = isCrossArm64 ? 'aarch64-linux-gnu-strip' : 'strip';
     print('Stripping Linux $arch symbols with $stripTool...');
-    for (final entity in destDir.listSync()) {
+    // Add followLinks: false so strip only runs on the real files, not symlinks:
+    for (final entity in destDir.listSync(followLinks: false)) {
       if (entity is File && entity.path.contains('.so')) {
         await runProcess(stripTool, ['--strip-unneeded', entity.path]);
       }
@@ -543,7 +545,8 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'ogg')));
 
     // opus
-    const opusAppleFlags = '-Os -fno-exceptions -fno-unwind-tables '
+    const opusAppleFlags =
+        '-Os -fno-exceptions -fno-unwind-tables '
         '-fno-asynchronous-unwind-tables';
     await runCmake([
       '-S',
@@ -671,7 +674,8 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'ogg')));
 
     // opus
-    const opusAppleFlags = '-Os -fno-exceptions -fno-unwind-tables '
+    const opusAppleFlags =
+        '-Os -fno-exceptions -fno-unwind-tables '
         '-fno-asynchronous-unwind-tables';
     await runCmake([
       '-S',
