@@ -49,7 +49,7 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload Android artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: xiph-android
           path: dist/xiph-android.tar.gz
@@ -85,25 +85,25 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload Xiph Linux x64 artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: xiph-linux-x64
           path: dist/xiph-linux-x64.tar.gz
 
       - name: Upload Xiph Linux arm64 artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: xiph-linux-arm64
           path: dist/xiph-linux-arm64.tar.gz
 
       - name: Upload VST3 Linux x64 artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: vst3-linux-x64
           path: dist/vst3-linux-x64.tar.gz
 
       - name: Upload VST3 Linux arm64 artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: vst3-linux-arm64
           path: dist/vst3-linux-arm64.tar.gz
@@ -139,19 +139,19 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload Xiph macOS artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: xiph-macos
           path: dist/xiph-macos.tar.gz
 
       - name: Upload VST3 macOS artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: vst3-macos
           path: dist/vst3-macos.tar.gz
 
       - name: Upload Xiph iOS artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: xiph-ios
           path: dist/xiph-ios.tar.gz
@@ -184,25 +184,25 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload Xiph Windows x64 artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: xiph-windows-x64
           path: dist/xiph-windows-x64.zip
 
       - name: Upload Xiph Windows arm64 artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: xiph-windows-arm64
           path: dist/xiph-windows-arm64.zip
 
       - name: Upload VST3 Windows x64 artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: vst3-windows-x64
           path: dist/vst3-windows-x64.zip
 
       - name: Upload VST3 Windows arm64 artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: vst3-windows-arm64
           path: dist/vst3-windows-arm64.zip
@@ -235,13 +235,13 @@ jobs:
         run: dart run tool/package.dart output dist
 
       - name: Upload Xiph headers artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: xiph-include
           path: dist/xiph-include.tar.gz
 
       - name: Upload VST3 headers artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: vst3-include
           path: dist/vst3-include.tar.gz
@@ -266,7 +266,7 @@ jobs:
         run: mkdir -p dist
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: downloaded_artifacts
 
@@ -298,7 +298,7 @@ jobs:
           echo "title=flutter_soloud Prebuilds $TAG" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.title }}
