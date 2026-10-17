@@ -1,10 +1,10 @@
-name: Build and Release Xiph Prebuilds
+name: Build and Release Xiph & VST3 Prebuilds
 
 on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag (leave blank to use version from pubspec.yaml, e.g. v1.0.1)'
+        description: 'Release tag (leave blank to use version from pubspec.yaml, e.g. v1.1.0)'
         required: false
         default: ''
   push:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   # -------------------------------------------------------------------------
-  # Android (arm64-v8a, armeabi-v7a, x86, x86_64)
+  # Android (arm64-v8a, armeabi-v7a, x86, x86_64) - Xiph only
   # -------------------------------------------------------------------------
   build-android:
     runs-on: ubuntu-latest
@@ -43,7 +43,7 @@ jobs:
           ndk-version: r26d
 
       - name: Build Android libraries
-        run: dart run tool/build.dart --os=android --ndk-path="${{ steps.setup-ndk.outputs.ndk-path }}"
+        run: dart run tool/build.dart --os=android --target=xiph --ndk-path="${{ steps.setup-ndk.outputs.ndk-path }}"
 
       - name: Package Android archive
         run: dart run tool/package.dart output dist
@@ -55,7 +55,7 @@ jobs:
           path: dist/xiph-android.tar.gz
 
   # -------------------------------------------------------------------------
-  # Linux (x86_64 and arm64)
+  # Linux (x86_64 and arm64) - Xiph & VST3
   # -------------------------------------------------------------------------
   build-linux:
     runs-on: ubuntu-latest
@@ -66,11 +66,11 @@ jobs:
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
-      - name: Cache Xiph sources
+      - name: Cache Xiph & VST3 sources
         uses: actions/cache@v5
         with:
           path: sources
-          key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
+          key: soloud-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc-vst3-3cdf9ca
 
       - name: Install dependencies and cross-compilers
         run: |
@@ -78,26 +78,38 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu ninja-build
           dart pub get
 
-      - name: Build Linux x64 and arm64
+      - name: Build Linux x64 and arm64 (Xiph & VST3)
         run: dart run tool/build.dart --os=linux --arch=all
 
       - name: Package Linux archives
         run: dart run tool/package.dart output dist
 
-      - name: Upload Linux x64 artifact
+      - name: Upload Xiph Linux x64 artifact
         uses: actions/upload-artifact@v5
         with:
           name: xiph-linux-x64
           path: dist/xiph-linux-x64.tar.gz
 
-      - name: Upload Linux arm64 artifact
+      - name: Upload Xiph Linux arm64 artifact
         uses: actions/upload-artifact@v5
         with:
           name: xiph-linux-arm64
           path: dist/xiph-linux-arm64.tar.gz
 
+      - name: Upload VST3 Linux x64 artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: vst3-linux-x64
+          path: dist/vst3-linux-x64.tar.gz
+
+      - name: Upload VST3 Linux arm64 artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: vst3-linux-arm64
+          path: dist/vst3-linux-arm64.tar.gz
+
   # -------------------------------------------------------------------------
-  # Apple (macOS universal, iOS device + simulator)
+  # Apple (macOS universal Xiph & VST3, iOS device + simulator Xiph)
   # -------------------------------------------------------------------------
   build-apple:
     runs-on: macos-latest
@@ -108,38 +120,44 @@ jobs:
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
-      - name: Cache Xiph sources
+      - name: Cache Xiph & VST3 sources
         uses: actions/cache@v5
         with:
           path: sources
-          key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
+          key: soloud-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc-vst3-3cdf9ca
 
       - name: Install dependencies
         run: dart pub get
 
-      - name: Build macOS universal static libraries
+      - name: Build macOS universal static libraries (Xiph & VST3)
         run: dart run tool/build.dart --os=macos
 
-      - name: Build iOS static libraries
-        run: dart run tool/build.dart --os=ios
+      - name: Build iOS static libraries (Xiph)
+        run: dart run tool/build.dart --os=ios --target=xiph
 
       - name: Package Apple archives
         run: dart run tool/package.dart output dist
 
-      - name: Upload macOS artifact
+      - name: Upload Xiph macOS artifact
         uses: actions/upload-artifact@v5
         with:
           name: xiph-macos
           path: dist/xiph-macos.tar.gz
 
-      - name: Upload iOS artifact
+      - name: Upload VST3 macOS artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: vst3-macos
+          path: dist/vst3-macos.tar.gz
+
+      - name: Upload Xiph iOS artifact
         uses: actions/upload-artifact@v5
         with:
           name: xiph-ios
           path: dist/xiph-ios.tar.gz
 
   # -------------------------------------------------------------------------
-  # Windows (x64 and arm64)
+  # Windows (x64 and arm64) - Xiph & VST3
   # -------------------------------------------------------------------------
   build-windows:
     runs-on: windows-latest
@@ -150,35 +168,47 @@ jobs:
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
-      - name: Cache Xiph sources
+      - name: Cache Xiph & VST3 sources
         uses: actions/cache@v5
         with:
           path: sources
-          key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
+          key: soloud-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc-vst3-3cdf9ca
 
       - name: Install dependencies
         run: dart pub get
 
-      - name: Build Windows x64 and arm64
+      - name: Build Windows x64 and arm64 (Xiph & VST3)
         run: dart run tool/build.dart --os=windows --arch=all
 
       - name: Package Windows archives
         run: dart run tool/package.dart output dist
 
-      - name: Upload Windows x64 artifact
+      - name: Upload Xiph Windows x64 artifact
         uses: actions/upload-artifact@v5
         with:
           name: xiph-windows-x64
           path: dist/xiph-windows-x64.zip
 
-      - name: Upload Windows arm64 artifact
+      - name: Upload Xiph Windows arm64 artifact
         uses: actions/upload-artifact@v5
         with:
           name: xiph-windows-arm64
           path: dist/xiph-windows-arm64.zip
 
+      - name: Upload VST3 Windows x64 artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: vst3-windows-x64
+          path: dist/vst3-windows-x64.zip
+
+      - name: Upload VST3 Windows arm64 artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: vst3-windows-arm64
+          path: dist/vst3-windows-arm64.zip
+
   # -------------------------------------------------------------------------
-  # Universal C Headers
+  # Universal C / C++ Headers (Xiph & VST3)
   # -------------------------------------------------------------------------
   package-headers:
     runs-on: ubuntu-latest
@@ -189,26 +219,32 @@ jobs:
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
-      - name: Cache Xiph sources
+      - name: Cache Xiph & VST3 sources
         uses: actions/cache@v5
         with:
           path: sources
-          key: xiph-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc
+          key: soloud-sources-ogg-db5c7a4-vorbis-84c0236-opus-c79a9bd-flac-9547dbc-vst3-3cdf9ca
 
       - name: Install dependencies
         run: dart pub get
 
-      - name: Extract universal headers
+      - name: Extract universal headers (Xiph & VST3)
         run: dart run tool/build.dart --headers-only
 
-      - name: Package headers archive
+      - name: Package headers archives
         run: dart run tool/package.dart output dist
 
-      - name: Upload headers artifact
+      - name: Upload Xiph headers artifact
         uses: actions/upload-artifact@v5
         with:
           name: xiph-include
           path: dist/xiph-include.tar.gz
+
+      - name: Upload VST3 headers artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: vst3-include
+          path: dist/vst3-include.tar.gz
 
   # -------------------------------------------------------------------------
   # Release Creation & Checksums
@@ -259,7 +295,7 @@ jobs:
           fi
           TAG="v${RAW_TAG#v}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "title=Xiph Prebuilds $TAG" >> $GITHUB_OUTPUT
+          echo "title=flutter_soloud Prebuilds $TAG" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -267,13 +303,14 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.title }}
           body: |
-            Automated reproducible build of Xiph.org libraries for `flutter_soloud`.
+            Automated reproducible build of Xiph.org (`ogg`, `vorbis`, `opus`, `flac`) and Steinberg VST3 Hosting SDK (`vst3_hosting`) libraries for `flutter_soloud`.
             
             ### Pinned Commits
             - `ogg`: `db5c7a4`
             - `vorbis`: `84c0236`
             - `opus`: `c79a9bd`
             - `flac`: `9547dbc`
+            - `vst3sdk`: `3cdf9ca` (`v3.8.1_build_84`)
             
             Verify integrity with `SHA256SUMS.txt`.
           files: |

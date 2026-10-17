@@ -13,6 +13,11 @@ void main(List<String> rawArgs) async {
       defaultsTo: 'all',
     )
     ..addOption('arch', defaultsTo: 'all')
+    ..addOption(
+      'target',
+      allowed: ['all', 'xiph', 'vst3'],
+      defaultsTo: 'all',
+    )
     ..addOption('sources-dir', defaultsTo: 'sources')
     ..addOption('output-dir', defaultsTo: 'output')
     ..addOption('ndk-path')
@@ -21,6 +26,9 @@ void main(List<String> rawArgs) async {
   final args = parser.parse(rawArgs);
   final targetOs = args['os'] as String;
   final targetArch = args['arch'] as String;
+  final buildTarget = args['target'] as String;
+  final buildXiph = buildTarget == 'all' || buildTarget == 'xiph';
+  final buildVst3 = buildTarget == 'all' || buildTarget == 'vst3';
   final sourcesDir = Directory(p.absolute(args['sources-dir'] as String));
   final outputDir = Directory(p.absolute(args['output-dir'] as String));
   final headersOnly = args['headers-only'] as bool;
@@ -28,25 +36,37 @@ void main(List<String> rawArgs) async {
   print('=== flutter_soloud_prebuilds Builder ===');
   print('Target OS: $targetOs');
   print('Target Arch: $targetArch');
+  print('Build Target: $buildTarget');
   print('Sources dir: ${sourcesDir.path}');
   print('Output dir: ${outputDir.path}');
 
   await sourcesDir.create(recursive: true);
   await outputDir.create(recursive: true);
 
-  // 1. Ensure Xiph git repositories are cloned at pinned commits
-  await ensureSources(sourcesDir);
+  // 1. Ensure Xiph and VST3 SDK git repositories are cloned at pinned commits
+  await ensureSources(sourcesDir, ensureXiph: buildXiph, ensureVst3: buildVst3);
 
   if (headersOnly) {
     print('\nCopying universal headers only...');
-    await copyHeaders(sourcesDir, Directory(p.join(outputDir.path, 'include')));
+    if (buildXiph) {
+      await copyHeaders(
+        sourcesDir,
+        Directory(p.join(outputDir.path, 'include')),
+      );
+    }
+    if (buildVst3) {
+      await copyVst3Headers(
+        sourcesDir,
+        Directory(p.join(outputDir.path, 'vst3', 'include')),
+      );
+    }
     print('Headers copied successfully.');
     return;
   }
 
   // Find Android NDK if needed
   String? androidNdk = args['ndk-path'] as String?;
-  if (targetOs == 'android' || targetOs == 'all') {
+  if (buildXiph && (targetOs == 'android' || targetOs == 'all')) {
     androidNdk ??=
         Platform.environment['ANDROID_NDK_HOME'] ??
         Platform.environment['ANDROID_NDK_ROOT'] ??
@@ -65,7 +85,7 @@ void main(List<String> rawArgs) async {
     }
   }
 
-  if (targetOs == 'android' || targetOs == 'all') {
+  if (buildXiph && (targetOs == 'android' || targetOs == 'all')) {
     if (androidNdk == null || !Directory(androidNdk).existsSync()) {
       if (targetOs == 'android') {
         throw Exception('Android NDK not found. Set ANDROID_NDK_HOME.');
@@ -78,18 +98,28 @@ void main(List<String> rawArgs) async {
   }
 
   if (targetOs == 'linux' || targetOs == 'all') {
-    await buildLinux(sourcesDir, outputDir, targetArch);
+    if (buildXiph) {
+      await buildLinux(sourcesDir, outputDir, targetArch);
+    }
+    if (buildVst3) {
+      await buildVst3Linux(sourcesDir, outputDir, targetArch);
+    }
   }
 
   if (targetOs == 'macos' || targetOs == 'all') {
     if (!Platform.isMacOS) {
       print('Skipping macOS: Host is not macOS.');
     } else {
-      await buildMacOS(sourcesDir, outputDir);
+      if (buildXiph) {
+        await buildMacOS(sourcesDir, outputDir);
+      }
+      if (buildVst3) {
+        await buildVst3MacOS(sourcesDir, outputDir);
+      }
     }
   }
 
-  if (targetOs == 'ios' || targetOs == 'all') {
+  if (buildXiph && (targetOs == 'ios' || targetOs == 'all')) {
     if (!Platform.isMacOS) {
       print('Skipping iOS: Host is not macOS.');
     } else {
@@ -101,35 +131,89 @@ void main(List<String> rawArgs) async {
     if (!Platform.isWindows) {
       print('Skipping Windows: Host is not Windows.');
     } else {
-      await buildWindows(sourcesDir, outputDir, targetArch);
+      if (buildXiph) {
+        await buildWindows(sourcesDir, outputDir, targetArch);
+      }
+      if (buildVst3) {
+        await buildVst3Windows(sourcesDir, outputDir, targetArch);
+      }
     }
   }
 
-  // Always copy headers to output/include
-  await copyHeaders(sourcesDir, Directory(p.join(outputDir.path, 'include')));
+  // Always copy headers to output/include and output/vst3/include
+  if (buildXiph) {
+    await copyHeaders(sourcesDir, Directory(p.join(outputDir.path, 'include')));
+  }
+  if (buildVst3) {
+    await copyVst3Headers(
+      sourcesDir,
+      Directory(p.join(outputDir.path, 'vst3', 'include')),
+    );
+  }
 
   print('\n=== All requested builds completed successfully! ===');
 }
 
-Future<void> ensureSources(Directory sourcesDir) async {
-  print('\nChecking Xiph Git repositories...');
-  for (final repo in xiphRepos) {
-    final repoDir = Directory(p.join(sourcesDir.path, repo.name));
-    if (!repoDir.existsSync()) {
-      print('Cloning ${repo.name} (${repo.commit})...');
-      await runProcess('git', ['clone', repo.url, repoDir.path]);
-      await runProcess('git', [
-        'checkout',
-        repo.commit,
-      ], workingDirectory: repoDir.path);
+Future<void> ensureSources(
+  Directory sourcesDir, {
+  bool ensureXiph = true,
+  bool ensureVst3 = true,
+}) async {
+  if (ensureXiph) {
+    print('\nChecking Xiph Git repositories...');
+    for (final repo in xiphRepos) {
+      final repoDir = Directory(p.join(sourcesDir.path, repo.name));
+      if (!repoDir.existsSync()) {
+        print('Cloning ${repo.name} (${repo.commit})...');
+        await runProcess('git', ['clone', repo.url, repoDir.path]);
+        await runProcess('git', [
+          'checkout',
+          repo.commit,
+        ], workingDirectory: repoDir.path);
+      } else {
+        print(
+          'Repository ${repo.name} exists. Ensuring commit ${repo.commit}...',
+        );
+        await runProcess('git', [
+          'checkout',
+          repo.commit,
+        ], workingDirectory: repoDir.path);
+      }
+    }
+  }
+
+  if (ensureVst3) {
+    print('\nChecking Steinberg VST3 SDK Git repository...');
+    final vstDir = Directory(p.join(sourcesDir.path, vst3SdkRepo.name));
+    if (!vstDir.existsSync()) {
+      print('Cloning ${vst3SdkRepo.name} (${vst3SdkRepo.commit})...');
+      await runProcess('git', ['clone', vst3SdkRepo.url, vstDir.path]);
     } else {
       print(
-        'Repository ${repo.name} exists. Ensuring commit ${repo.commit}...',
+        'Repository ${vst3SdkRepo.name} exists. Ensuring commit ${vst3SdkRepo.commit}...',
       );
-      await runProcess('git', [
-        'checkout',
-        repo.commit,
-      ], workingDirectory: repoDir.path);
+    }
+    await runProcess(
+      'git',
+      ['checkout', vst3SdkRepo.commit],
+      workingDirectory: vstDir.path,
+    );
+    if (vst3SdkRepo.submodules.isNotEmpty) {
+      print(
+        'Initializing VST3 submodules (${vst3SdkRepo.submodules.join(", ")})...',
+      );
+      await runProcess(
+        'git',
+        [
+          'submodule',
+          'update',
+          '--init',
+          '--depth',
+          '1',
+          ...vst3SdkRepo.submodules,
+        ],
+        workingDirectory: vstDir.path,
+      );
     }
   }
 }
@@ -493,7 +577,6 @@ Future<void> buildLinux(
     // Strip symbols from non-symlink .so files
     final stripTool = isCrossArm64 ? 'aarch64-linux-gnu-strip' : 'strip';
     print('Stripping Linux $arch symbols with $stripTool...');
-    // Add followLinks: false so strip only runs on the real files, not symlinks:
     for (final entity in destDir.listSync(followLinks: false)) {
       if (entity is File && entity.path.contains('.so')) {
         await runProcess(stripTool, ['--strip-unneeded', entity.path]);
@@ -877,7 +960,295 @@ Future<void> buildWindows(
 }
 
 // ---------------------------------------------------------------------------
-// Copy Universal Headers
+// VST3 Hosting SDK Static Library Builds (macOS, Linux, Windows)
+// ---------------------------------------------------------------------------
+
+void writeVst3HostingCmakeLists(
+  Directory vst3SdkDir,
+  Directory cmakeProjectDir,
+) {
+  cmakeProjectDir.createSync(recursive: true);
+  final sdkRoot = vst3SdkDir.path.replaceAll(r'\', '/');
+  final cmakeContent = '''
+cmake_minimum_required(VERSION 3.15)
+if(APPLE)
+  project(vst3_hosting LANGUAGES C CXX OBJCXX)
+else()
+  project(vst3_hosting LANGUAGES C CXX)
+endif()
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+set(SDK_ROOT "$sdkRoot")
+
+set(VST3_SOURCES
+  # pluginterfaces
+  "\${SDK_ROOT}/pluginterfaces/base/conststringtable.cpp"
+  "\${SDK_ROOT}/pluginterfaces/base/coreiids.cpp"
+  "\${SDK_ROOT}/pluginterfaces/base/funknown.cpp"
+  "\${SDK_ROOT}/pluginterfaces/base/ustring.cpp"
+  # base
+  "\${SDK_ROOT}/base/source/baseiids.cpp"
+  "\${SDK_ROOT}/base/source/fbuffer.cpp"
+  "\${SDK_ROOT}/base/source/fdebug.cpp"
+  "\${SDK_ROOT}/base/source/fdynlib.cpp"
+  "\${SDK_ROOT}/base/source/fobject.cpp"
+  "\${SDK_ROOT}/base/source/fstreamer.cpp"
+  "\${SDK_ROOT}/base/source/fstring.cpp"
+  "\${SDK_ROOT}/base/source/timer.cpp"
+  "\${SDK_ROOT}/base/source/updatehandler.cpp"
+  "\${SDK_ROOT}/base/thread/source/fcondition.cpp"
+  "\${SDK_ROOT}/base/thread/source/flock.cpp"
+  # sdk_common
+  "\${SDK_ROOT}/public.sdk/source/common/commoniids.cpp"
+  "\${SDK_ROOT}/public.sdk/source/common/commonstringconvert.cpp"
+  "\${SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
+  "\${SDK_ROOT}/public.sdk/source/common/openurl.cpp"
+  "\${SDK_ROOT}/public.sdk/source/common/pluginview.cpp"
+  "\${SDK_ROOT}/public.sdk/source/common/readfile.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/vstpresetfile.cpp"
+  # sdk_hosting
+  "\${SDK_ROOT}/public.sdk/source/vst/hosting/connectionproxy.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/hosting/eventlist.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/hosting/hostclasses.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/hosting/hostdataexchangehandler.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/hosting/module.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/hosting/parameterchanges.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/hosting/pluginterfacesupport.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/hosting/plugprovider.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/hosting/processdata.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/utility/stringconvert.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/utility/systemtime.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/utility/vst2persistence.cpp"
+  "\${SDK_ROOT}/public.sdk/source/vst/vstinitiids.cpp"
+)
+
+if(APPLE)
+  list(APPEND VST3_SOURCES
+    "\${SDK_ROOT}/public.sdk/source/common/threadchecker_mac.mm"
+    "\${SDK_ROOT}/public.sdk/source/common/systemclipboard_mac.mm"
+    "\${SDK_ROOT}/public.sdk/source/vst/hosting/module_mac.mm"
+  )
+  set_source_files_properties(
+    "\${SDK_ROOT}/public.sdk/source/common/threadchecker_mac.mm"
+    "\${SDK_ROOT}/public.sdk/source/common/systemclipboard_mac.mm"
+    "\${SDK_ROOT}/public.sdk/source/vst/hosting/module_mac.mm"
+    PROPERTIES COMPILE_FLAGS "-fobjc-arc"
+  )
+elseif(WIN32)
+  list(APPEND VST3_SOURCES
+    "\${SDK_ROOT}/public.sdk/source/common/threadchecker_win32.cpp"
+    "\${SDK_ROOT}/public.sdk/source/common/systemclipboard_win32.cpp"
+    "\${SDK_ROOT}/public.sdk/source/vst/hosting/module_win32.cpp"
+  )
+else()
+  list(APPEND VST3_SOURCES
+    "\${SDK_ROOT}/public.sdk/source/common/threadchecker_linux.cpp"
+    "\${SDK_ROOT}/public.sdk/source/common/systemclipboard_linux.cpp"
+    "\${SDK_ROOT}/public.sdk/source/vst/hosting/module_linux.cpp"
+  )
+endif()
+
+add_library($vst3LibName STATIC \${VST3_SOURCES})
+target_include_directories($vst3LibName PUBLIC "\${SDK_ROOT}")
+target_compile_definitions($vst3LibName PRIVATE RELEASE=1 NDEBUG=1)
+if(WIN32)
+  target_compile_definitions($vst3LibName PRIVATE UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
+endif()
+
+install(TARGETS $vst3LibName ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+''';
+  File(p.join(cmakeProjectDir.path, 'CMakeLists.txt'))
+      .writeAsStringSync(cmakeContent);
+}
+
+Future<void> buildVst3Linux(
+  Directory sourcesDir,
+  Directory outputDir,
+  String targetArch,
+) async {
+  print('\n--- Building VST3 Hosting SDK for Linux ---');
+  final vst3SdkDir = Directory(p.join(sourcesDir.path, vst3SdkRepo.name));
+  final arches = targetArch == 'all'
+      ? ['x64', 'arm64']
+      : (targetArch == 'x86_64' || targetArch == 'x64')
+      ? ['x64']
+      : ['arm64'];
+
+  for (final arch in arches) {
+    print('\n>>> Building VST3 Linux $arch <<<');
+    final tempSrc = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_vst3_src_linux', arch),
+    );
+    final tempBuild = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_vst3_build_linux', arch),
+    );
+    final tempInstall = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_vst3_install_linux', arch),
+    );
+    cleanDir(tempSrc);
+    cleanDir(tempBuild);
+    cleanDir(tempInstall);
+
+    writeVst3HostingCmakeLists(vst3SdkDir, tempSrc);
+
+    final isCrossArm64 = arch == 'arm64' && Platform.version.contains('x64');
+    await runCmake([
+      '-S',
+      tempSrc.path,
+      '-B',
+      tempBuild.path,
+      '-DCMAKE_BUILD_TYPE=Release',
+      '-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+      '-DCMAKE_CXX_FLAGS=-O2 -ffunction-sections -fdata-sections',
+      '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
+      if (isCrossArm64) ...[
+        '-DCMAKE_SYSTEM_NAME=Linux',
+        '-DCMAKE_SYSTEM_PROCESSOR=aarch64',
+        '-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc',
+        '-DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++',
+      ],
+    ]);
+    await runCmakeBuild(tempBuild);
+
+    final destDir = Directory(p.join(outputDir.path, 'vst3', 'linux', arch));
+    cleanDir(destDir);
+    final builtLib = File(
+      p.join(tempInstall.path, 'lib', 'lib$vst3LibName.a'),
+    );
+    final destLib = p.join(destDir.path, 'lib$vst3LibName.a');
+    await builtLib.copy(destLib);
+
+    final stripTool = isCrossArm64 ? 'aarch64-linux-gnu-strip' : 'strip';
+    await runProcess(stripTool, ['--strip-debug', destLib]);
+
+    final licenseFile = File(p.join(vst3SdkDir.path, 'LICENSE.txt'));
+    if (licenseFile.existsSync()) {
+      await licenseFile.copy(p.join(destDir.path, 'LICENSE.txt'));
+    }
+    print('VST3 Linux $arch static library copied to ${destDir.path}');
+  }
+}
+
+Future<void> buildVst3MacOS(Directory sourcesDir, Directory outputDir) async {
+  print('\n--- Building VST3 Hosting SDK for macOS (Universal) ---');
+  final vst3SdkDir = Directory(p.join(sourcesDir.path, vst3SdkRepo.name));
+  final arches = ['arm64', 'x86_64'];
+  final archInstalls = <String, Directory>{};
+
+  for (final arch in arches) {
+    print('\n>>> Building VST3 macOS $arch <<<');
+    final tempSrc = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_vst3_src_macos', arch),
+    );
+    final tempBuild = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_vst3_build_macos', arch),
+    );
+    final tempInstall = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_vst3_install_macos', arch),
+    );
+    cleanDir(tempSrc);
+    cleanDir(tempBuild);
+    cleanDir(tempInstall);
+    archInstalls[arch] = tempInstall;
+
+    writeVst3HostingCmakeLists(vst3SdkDir, tempSrc);
+
+    await runCmake([
+      '-S',
+      tempSrc.path,
+      '-B',
+      tempBuild.path,
+      '-DCMAKE_BUILD_TYPE=Release',
+      '-DCMAKE_OSX_ARCHITECTURES=$arch',
+      // std::filesystem in VST3 Hosting Module requires macOS 10.15+
+      '-DCMAKE_OSX_DEPLOYMENT_TARGET=10.15',
+      '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
+    ]);
+    await runCmakeBuild(tempBuild);
+  }
+
+  final destDir = Directory(p.join(outputDir.path, 'vst3', 'macos'));
+  cleanDir(destDir);
+  final fileName = 'lib$vst3LibName.a';
+  final arm64Path = p.join(archInstalls['arm64']!.path, 'lib', fileName);
+  final x86Path = p.join(archInstalls['x86_64']!.path, 'lib', fileName);
+  final destPath = p.join(destDir.path, fileName);
+
+  await runProcess('lipo', [
+    '-create',
+    arm64Path,
+    x86Path,
+    '-output',
+    destPath,
+  ]);
+  await runProcess('strip', ['-x', destPath]);
+
+  final licenseFile = File(p.join(vst3SdkDir.path, 'LICENSE.txt'));
+  if (licenseFile.existsSync()) {
+    await licenseFile.copy(p.join(destDir.path, 'LICENSE.txt'));
+  }
+  print('Universal VST3 macOS static library created in ${destDir.path}');
+}
+
+Future<void> buildVst3Windows(
+  Directory sourcesDir,
+  Directory outputDir,
+  String targetArch,
+) async {
+  print('\n--- Building VST3 Hosting SDK for Windows ---');
+  final vst3SdkDir = Directory(p.join(sourcesDir.path, vst3SdkRepo.name));
+  final arches = targetArch == 'all'
+      ? ['x64', 'arm64']
+      : (targetArch == 'arm64' ? ['arm64'] : ['x64']);
+
+  for (final arch in arches) {
+    print('\n>>> Building VST3 Windows $arch <<<');
+    final tempSrc = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_vst3_src_windows', arch),
+    );
+    final tempBuild = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_vst3_build_windows', arch),
+    );
+    final tempInstall = Directory(
+      p.join(Directory.systemTemp.path, 'soloud_vst3_install_windows', arch),
+    );
+    cleanDir(tempSrc);
+    cleanDir(tempBuild);
+    cleanDir(tempInstall);
+
+    writeVst3HostingCmakeLists(vst3SdkDir, tempSrc);
+
+    final isArm64 = arch == 'arm64';
+    await runCmake([
+      '-S',
+      tempSrc.path,
+      '-B',
+      tempBuild.path,
+      '-DCMAKE_BUILD_TYPE=Release',
+      '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',
+      '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
+      if (isArm64) ...['-A', 'ARM64'],
+    ]);
+    await runCmakeBuild(tempBuild);
+
+    final destDir = Directory(p.join(outputDir.path, 'vst3', 'windows', arch));
+    cleanDir(destDir);
+    final builtLib = File(p.join(tempInstall.path, 'lib', '$vst3LibName.lib'));
+    await builtLib.copy(p.join(destDir.path, '$vst3LibName.lib'));
+
+    final licenseFile = File(p.join(vst3SdkDir.path, 'LICENSE.txt'));
+    if (licenseFile.existsSync()) {
+      await licenseFile.copy(p.join(destDir.path, 'LICENSE.txt'));
+    }
+    print('VST3 Windows $arch static library copied to ${destDir.path}');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Copy Universal Headers (Xiph & VST3)
 // ---------------------------------------------------------------------------
 Future<void> copyHeaders(Directory sourcesDir, Directory destIncludeDir) async {
   cleanDir(destIncludeDir);
@@ -937,6 +1308,37 @@ Future<void> copyHeaders(Directory sourcesDir, Directory destIncludeDir) async {
     Directory(p.join(sourcesDir.path, 'flac', 'include', 'share')),
     Directory(p.join(destIncludeDir.path, 'share')),
   );
+}
+
+Future<void> copyVst3Headers(
+  Directory sourcesDir,
+  Directory destVst3IncludeDir,
+) async {
+  cleanDir(destVst3IncludeDir);
+  final vst3SdkDir = Directory(p.join(sourcesDir.path, vst3SdkRepo.name));
+
+  // Copy header files (.h) from pluginterfaces/, base/, and public.sdk/source/
+  for (final subPath in ['pluginterfaces', 'base', 'public.sdk/source']) {
+    final srcDir = Directory(p.join(vst3SdkDir.path, subPath));
+    if (!srcDir.existsSync()) continue;
+    for (final entity in srcDir.listSync(recursive: true)) {
+      if (entity is File && entity.path.endsWith('.h')) {
+        final relPath = p.relative(entity.path, from: vst3SdkDir.path);
+        // Skip sample/test headers if any exist
+        if (relPath.contains('/test/') || relPath.contains(r'\test\')) {
+          continue;
+        }
+        final targetPath = p.join(destVst3IncludeDir.path, relPath);
+        await Directory(p.dirname(targetPath)).create(recursive: true);
+        await entity.copy(targetPath);
+      }
+    }
+  }
+
+  final licenseFile = File(p.join(vst3SdkDir.path, 'LICENSE.txt'));
+  if (licenseFile.existsSync()) {
+    await licenseFile.copy(p.join(destVst3IncludeDir.path, 'LICENSE.txt'));
+  }
 }
 
 Future<void> copyDirectory(Directory src, Directory dst) async {

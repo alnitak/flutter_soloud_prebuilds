@@ -3,7 +3,10 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 String getPackageVersion() {
-  final pubspecFile = File('pubspec.yaml');
+  final scriptRoot = File.fromUri(Platform.script).parent.parent;
+  final pubspecFile = File(p.join(scriptRoot.path, 'pubspec.yaml')).existsSync()
+      ? File(p.join(scriptRoot.path, 'pubspec.yaml'))
+      : File('pubspec.yaml');
   if (pubspecFile.existsSync()) {
     for (final line in pubspecFile.readAsLinesSync()) {
       if (line.startsWith('version:')) {
@@ -23,7 +26,7 @@ void main(List<String> args) async {
   final outputDir = Directory(p.absolute(args.isNotEmpty ? args[0] : 'output'));
   final distDir = Directory(p.absolute(args.length > 1 ? args[1] : 'dist'));
 
-  print('=== Packaging Xiph Prebuilds ===');
+  print('=== Packaging Xiph & VST3 Prebuilds ===');
   print('Input Output Dir: ${outputDir.path}');
   print('Distribution Dir: ${distDir.path}');
   final version = getPackageVersion();
@@ -34,10 +37,14 @@ void main(List<String> args) async {
   }
   await distDir.create(recursive: true);
 
+  // ---------------------------------------------------------------------------
+  // Xiph Archives
+  // ---------------------------------------------------------------------------
+
   // 1. Android
   final androidDir = Directory(p.join(outputDir.path, 'android'));
   if (androidDir.existsSync()) {
-    print('Packaging Android...');
+    print('Packaging Xiph Android...');
     writeVersionFile(androidDir, version);
     await makeTarGz(androidDir, p.join(distDir.path, 'xiph-android.tar.gz'));
   }
@@ -47,7 +54,7 @@ void main(List<String> args) async {
   if (linuxDir.existsSync()) {
     for (final archDir in linuxDir.listSync().whereType<Directory>()) {
       final arch = p.basename(archDir.path);
-      print('Packaging Linux $arch...');
+      print('Packaging Xiph Linux $arch...');
       writeVersionFile(archDir, version);
       await makeTarGz(archDir, p.join(distDir.path, 'xiph-linux-$arch.tar.gz'));
     }
@@ -56,7 +63,7 @@ void main(List<String> args) async {
   // 3. macOS
   final macosDir = Directory(p.join(outputDir.path, 'macos'));
   if (macosDir.existsSync()) {
-    print('Packaging macOS...');
+    print('Packaging Xiph macOS...');
     writeVersionFile(macosDir, version);
     await makeTarGz(macosDir, p.join(distDir.path, 'xiph-macos.tar.gz'));
   }
@@ -64,7 +71,7 @@ void main(List<String> args) async {
   // 4. iOS
   final iosDir = Directory(p.join(outputDir.path, 'ios'));
   if (iosDir.existsSync()) {
-    print('Packaging iOS...');
+    print('Packaging Xiph iOS...');
     writeVersionFile(iosDir, version);
     await makeTarGz(iosDir, p.join(distDir.path, 'xiph-ios.tar.gz'));
   }
@@ -74,21 +81,79 @@ void main(List<String> args) async {
   if (windowsDir.existsSync()) {
     for (final archDir in windowsDir.listSync().whereType<Directory>()) {
       final arch = p.basename(archDir.path);
-      print('Packaging Windows $arch...');
+      print('Packaging Xiph Windows $arch...');
       writeVersionFile(archDir, version);
       await makeZip(archDir, p.join(distDir.path, 'xiph-windows-$arch.zip'));
     }
   }
 
-  // 6. Include headers
+  // 6. Xiph Include headers
   final includeDir = Directory(p.join(outputDir.path, 'include'));
   if (includeDir.existsSync()) {
-    print('Packaging Include Headers...');
+    print('Packaging Xiph Include Headers...');
     writeVersionFile(includeDir, version);
     await makeTarGz(includeDir, p.join(distDir.path, 'xiph-include.tar.gz'));
   }
 
-  // 7. Calculate SHA256 sums
+  // ---------------------------------------------------------------------------
+  // VST3 Archives
+  // ---------------------------------------------------------------------------
+  final vst3Dir = Directory(p.join(outputDir.path, 'vst3'));
+  if (vst3Dir.existsSync()) {
+    // 1. VST3 Linux x64 & arm64
+    final vst3LinuxDir = Directory(p.join(vst3Dir.path, 'linux'));
+    if (vst3LinuxDir.existsSync()) {
+      for (final archDir in vst3LinuxDir.listSync().whereType<Directory>()) {
+        final arch = p.basename(archDir.path);
+        print('Packaging VST3 Linux $arch...');
+        writeVersionFile(archDir, version);
+        await makeTarGz(
+          archDir,
+          p.join(distDir.path, 'vst3-linux-$arch.tar.gz'),
+        );
+      }
+    }
+
+    // 2. VST3 macOS
+    final vst3MacosDir = Directory(p.join(vst3Dir.path, 'macos'));
+    if (vst3MacosDir.existsSync()) {
+      print('Packaging VST3 macOS...');
+      writeVersionFile(vst3MacosDir, version);
+      await makeTarGz(
+        vst3MacosDir,
+        p.join(distDir.path, 'vst3-macos.tar.gz'),
+      );
+    }
+
+    // 3. VST3 Windows x64 & arm64
+    final vst3WindowsDir = Directory(p.join(vst3Dir.path, 'windows'));
+    if (vst3WindowsDir.existsSync()) {
+      for (final archDir in vst3WindowsDir.listSync().whereType<Directory>()) {
+        final arch = p.basename(archDir.path);
+        print('Packaging VST3 Windows $arch...');
+        writeVersionFile(archDir, version);
+        await makeZip(
+          archDir,
+          p.join(distDir.path, 'vst3-windows-$arch.zip'),
+        );
+      }
+    }
+
+    // 4. VST3 Include headers
+    final vst3IncludeDir = Directory(p.join(vst3Dir.path, 'include'));
+    if (vst3IncludeDir.existsSync()) {
+      print('Packaging VST3 Include Headers...');
+      writeVersionFile(vst3IncludeDir, version);
+      await makeTarGz(
+        vst3IncludeDir,
+        p.join(distDir.path, 'vst3-include.tar.gz'),
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Calculate SHA256 sums
+  // ---------------------------------------------------------------------------
   print('\nCalculating SHA256 checksums...');
   final sumsFile = File(p.join(distDir.path, 'SHA256SUMS.txt'));
   final lines = <String>[];
@@ -119,7 +184,11 @@ Future<void> makeTarGz(Directory srcDir, String tarGzPath) async {
   if (result.exitCode != 0) {
     stderr.write(result.stderr);
     throw ProcessException(
-        'tar', ['-czf', tarGzPath], 'Failed to create tar.gz', result.exitCode);
+      'tar',
+      ['-czf', tarGzPath],
+      'Failed to create tar.gz',
+      result.exitCode,
+    );
   }
   print('Created: $tarGzPath');
 }
@@ -137,19 +206,24 @@ Future<void> makeZip(Directory srcDir, String zipPath) async {
     ]);
   } else {
     result = await Process.run(
-        'zip',
-        [
-          '-r',
-          zipPath,
-          '.',
-        ],
-        workingDirectory: srcDir.path);
+      'zip',
+      [
+        '-r',
+        zipPath,
+        '.',
+      ],
+      workingDirectory: srcDir.path,
+    );
   }
 
   if (result.exitCode != 0) {
     stderr.write(result.stderr);
     throw ProcessException(
-        'zip', [zipPath], 'Failed to create zip', result.exitCode);
+      'zip',
+      [zipPath],
+      'Failed to create zip',
+      result.exitCode,
+    );
   }
   print('Created: $zipPath');
 }

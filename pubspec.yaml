@@ -1,6 +1,6 @@
 name: flutter_soloud_prebuilds
-description: Build tooling for precompiled Xiph libraries used by flutter_soloud.
-version: 1.0.1
+description: Build tooling for precompiled Xiph and Steinberg VST3 Hosting SDK libraries used by flutter_soloud.
+version: 1.1.0
 publish_to: none
 
 environment:
