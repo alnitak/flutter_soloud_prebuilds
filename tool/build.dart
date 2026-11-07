@@ -343,6 +343,12 @@ Future<void> buildAndroid(
       'cmake',
       'android.toolchain.cmake',
     );
+    final abiFlags = switch (abi) {
+      'armeabi-v7a' => ' -mfpu=neon',
+      'x86' => ' -msse2 -msse3',
+      'x86_64' => ' -msse2 -msse3 -msse4.1 -mpopcnt',
+      _ => '',
+    };
     final commonFlags = [
       '-DCMAKE_TOOLCHAIN_FILE=$ndkToolchain',
       '-DANDROID_ABI=$abi',
@@ -350,7 +356,7 @@ Future<void> buildAndroid(
       '-DCMAKE_BUILD_TYPE=Release',
       '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=ON',
-      '-DCMAKE_C_FLAGS=-Os -flto -ffunction-sections -fdata-sections',
+      '-DCMAKE_C_FLAGS=-O3 -fno-math-errno -fno-trapping-math -ffp-contract=fast$abiFlags -flto -ffunction-sections -fdata-sections',
       '-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384,--gc-sections -flto',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
     ];
@@ -378,6 +384,7 @@ Future<void> buildAndroid(
       '-DOPUS_BUILD_TESTING=OFF',
       '-DOPUS_STACK_PROTECTOR=OFF',
       '-DOPUS_CUSTOM_MODES=ON',
+      if (abi == 'x86_64') '-DOPUS_X86_PRESUME_SSE4_1=ON',
     ]);
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'opus')));
 
@@ -474,12 +481,13 @@ Future<void> buildLinux(
     cleanDir(tempInstall);
 
     final isCrossArm64 = arch == 'arm64' && Platform.version.contains('x64');
+    final archCFlags = arch == 'x64' ? ' -msse2 -msse3' : '';
     final commonFlags = [
       '-DCMAKE_BUILD_TYPE=Release',
       '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=ON',
       '-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
-      '-DCMAKE_C_FLAGS=-O2 -flto -ffunction-sections -fdata-sections',
+      '-DCMAKE_C_FLAGS=-O3 -fno-math-errno -fno-trapping-math -ffp-contract=fast$archCFlags -flto -ffunction-sections -fdata-sections',
       '-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--gc-sections -flto',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
       if (isCrossArm64) ...[
@@ -606,12 +614,17 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
     cleanDir(tempInstall);
     archInstalls[arch] = tempInstall;
 
+    final archCFlags = arch == 'x86_64' ? ' -msse4.1' : '';
+    final appleXiphCFlags =
+        '-O3 -fno-math-errno -fno-trapping-math -ffp-contract=fast$archCFlags '
+        '-fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables';
     final commonFlags = [
       '-DCMAKE_BUILD_TYPE=Release',
       '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=OFF',
       '-DCMAKE_OSX_ARCHITECTURES=$arch',
       '-DCMAKE_OSX_DEPLOYMENT_TARGET=10.13',
+      '-DCMAKE_C_FLAGS=$appleXiphCFlags',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
     ];
 
@@ -628,9 +641,6 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'ogg')));
 
     // opus
-    const opusAppleFlags =
-        '-Os -fno-exceptions -fno-unwind-tables '
-        '-fno-asynchronous-unwind-tables';
     await runCmake([
       '-S',
       p.join(sourcesDir.path, 'opus'),
@@ -640,9 +650,9 @@ Future<void> buildMacOS(Directory sourcesDir, Directory outputDir) async {
       '-DOPUS_BUILD_PROGRAMS=OFF',
       '-DOPUS_BUILD_TESTING=OFF',
       '-DOPUS_BUILD_SHARED_LIBRARY=OFF',
-      '-DCMAKE_C_FLAGS=$opusAppleFlags',
       '-DOPUS_STACK_PROTECTOR=OFF',
       '-DOPUS_CUSTOM_MODES=ON',
+      if (arch == 'x86_64') '-DOPUS_X86_PRESUME_SSE4_1=ON',
     ]);
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'opus')));
 
@@ -733,6 +743,10 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
     cleanDir(tempInstall);
     targetInstalls[key] = tempInstall;
 
+    final archCFlags = arch == 'x86_64' ? ' -msse4.1' : '';
+    final appleXiphCFlags =
+        '-O3 -fno-math-errno -fno-trapping-math -ffp-contract=fast$archCFlags '
+        '-fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables';
     final commonFlags = [
       '-DCMAKE_BUILD_TYPE=Release',
       '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
@@ -741,6 +755,7 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
       '-DCMAKE_OSX_SYSROOT=$sdk',
       '-DCMAKE_OSX_ARCHITECTURES=$arch',
       '-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0',
+      '-DCMAKE_C_FLAGS=$appleXiphCFlags',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
     ];
 
@@ -757,9 +772,6 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'ogg')));
 
     // opus
-    const opusAppleFlags =
-        '-Os -fno-exceptions -fno-unwind-tables '
-        '-fno-asynchronous-unwind-tables';
     await runCmake([
       '-S',
       p.join(sourcesDir.path, 'opus'),
@@ -769,9 +781,9 @@ Future<void> buildIOS(Directory sourcesDir, Directory outputDir) async {
       '-DOPUS_BUILD_PROGRAMS=OFF',
       '-DOPUS_BUILD_TESTING=OFF',
       '-DOPUS_BUILD_SHARED_LIBRARY=OFF',
-      '-DCMAKE_C_FLAGS=$opusAppleFlags',
       '-DOPUS_STACK_PROTECTOR=OFF',
       '-DOPUS_CUSTOM_MODES=ON',
+      if (arch == 'x86_64') '-DOPUS_X86_PRESUME_SSE4_1=ON',
     ]);
     await runCmakeBuild(Directory(p.join(tempBuild.path, 'opus')));
 
@@ -875,6 +887,8 @@ Future<void> buildWindows(
       '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
       '-DBUILD_SHARED_LIBS=ON',
       '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',
+      '-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /Oi /Ot /GL /Gy /Zc:inline /DNDEBUG',
+      '-DCMAKE_SHARED_LINKER_FLAGS_RELEASE=/INCREMENTAL:NO /LTCG /OPT:REF /OPT:ICF',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
       if (isArm64) ...['-A', 'ARM64'],
     ];
@@ -1102,7 +1116,7 @@ Future<void> buildVst3Linux(
       tempBuild.path,
       '-DCMAKE_BUILD_TYPE=Release',
       '-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
-      '-DCMAKE_CXX_FLAGS=-O2 -ffunction-sections -fdata-sections',
+      '-DCMAKE_CXX_FLAGS=-O3 -fno-math-errno -fno-trapping-math -ffp-contract=fast -ffunction-sections -fdata-sections',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
       if (isCrossArm64) ...[
         '-DCMAKE_SYSTEM_NAME=Linux',
@@ -1165,6 +1179,7 @@ Future<void> buildVst3MacOS(Directory sourcesDir, Directory outputDir) async {
       '-DCMAKE_OSX_ARCHITECTURES=$arch',
       // std::filesystem in VST3 Hosting Module requires macOS 10.15+
       '-DCMAKE_OSX_DEPLOYMENT_TARGET=10.15',
+      '-DCMAKE_CXX_FLAGS=-O3 -fno-math-errno -fno-trapping-math -ffp-contract=fast',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
     ]);
     await runCmakeBuild(tempBuild);
@@ -1229,6 +1244,7 @@ Future<void> buildVst3Windows(
       tempBuild.path,
       '-DCMAKE_BUILD_TYPE=Release',
       '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',
+      '-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /Oi /Ot /Gy /Zc:inline /DNDEBUG',
       '-DCMAKE_INSTALL_PREFIX=${tempInstall.path}',
       if (isArm64) ...['-A', 'ARM64'],
     ]);
